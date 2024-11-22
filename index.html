@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Include the CesiumJS JavaScript and CSS files -->
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.123/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.123/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- Toolbar Section -->
+<div id="toolbar">
+  <!-- Search Section -->
+  <div id="searchContainer">
+    <input type="text" id="searchBox" placeholder="Search for a location..." />
+    <ul id="suggestions" style="list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto;"></ul>
+  </div>
+
+  <!-- Toggle visibility of GeoJSON data -->
+  <div class="toggle-item">
+    <input type="checkbox" id="geoJsonToggle" checked>
+    <label for="geoJsonToggle">All Stations</label>
+  </div>
+
+  <!-- Toggle visibility of SubUrban Line -->
+  <div class="toggle-item">
+    <input type="checkbox" id="lineToggle" checked>
+    <label for="lineToggle">SubUrbanLine</label>
+    <button class="zoom-button" id="zoomLine">Zoom to Line</button>
+  </div>
+
+  <!-- Collapsible Group for 3D Models -->
+  <button class="collapsible">3D Models</button>
+  <div class="content" id="modelLayers">
+    <!-- Master checkbox for controlling all models -->
+    <div class="toggle-item">
+      <input type="checkbox" id="masterModelCheckbox" checked>
+      <label for="masterModelCheckbox">Toggle All Models</label>
+    </div>
+    <!-- Dynamically added toggle items for models will go here -->
+  </div>
+
+  <!-- Collapsible Group for Metro Layers -->
+  <button class="collapsible">Metro Layers</button>
+  <div class="content" id="metroLayers">
+    <div class="toggle-item">
+      <input type="checkbox" id="masterCheckbox" checked>
+      <label for="masterCheckbox">Toggle All Layers</label>
+    </div>
+    <!-- Dynamically added toggle items for metro layers will go here -->
+  </div>
+</div>
+
+
+<!-- Cesium and Overlay Container -->
+<div id="cesiumContainer" class="fullSize"></div>
+
+<style>
+  /* Toolbar Styles */
+  #toolbar {
+  position: absolute; /* Ensure it floats over the map */
+  background: rgba(42, 42, 42, 0.8);
+  padding: 10px;
+  border-radius: 4px;
+  width: auto; /* Automatically adjusts to content width */
+  max-width: 600px; /* Optional: Set a maximum width to prevent it from being too wide */
+  min-width: 200px; /* Optional: Set a minimum width for better usability */
+  color: white;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000; /* Ensure it is above other elements */
+  box-sizing: border-box; /* Ensures padding doesn't affect width calculations */
+}
+
+
+  #searchBox {
+    width: 250px; /* Reduced width */
+    padding: 6px; /* Reduced padding */
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #ffffff; /* Darker input background */
+    color: dark; /* White text for better contrast */
+    font-size: 13px;  /* Reduced font-size */
+  }
+
+  #suggestions li {
+    padding: 8px;  /* Reduced padding */
+    cursor: pointer;
+    font-size: 12px; /* Reduced font-size */
+    color: #ddd; /* Lighter text color */
+    background-color: #444; /* Darker suggestion background */
+    border-bottom: 1px solid #555;
+  }
+
+  #suggestions li:hover {
+    background-color: #007bff;
+    color: white;
+  }
+
+  #suggestions li:active {
+    background-color: #0056b3;
+  }
+
+  /* Toggle Item Styles */
+  .toggle-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .toggle-item input {
+    margin-right: 6px;  /* Reduced margin */
+  }
+
+  .zoom-button {
+    margin-left: 8px;  /* Reduced margin */
+    padding: 3px 5px;  /* Reduced padding */
+    background-color: #4CAF50; /* Green button */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .zoom-button:hover {
+    background-color: #45a049; /* Darker green */
+  }
+
+  /* Collapsible Section Styles */
+  .collapsible {
+    background-color: #333;
+    color: white;
+    cursor: pointer;
+    padding: 8px;  /* Reduced padding */
+    width: 100%;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 14px;  /* Reduced font-size */
+  }
+
+  .collapsible:hover, .active {
+    background-color: #444;
+  }
+
+  /* Make content scrollable when expanded */
+  .content {
+    padding-left: 16px;  /* Reduced padding */
+    display: none;
+    overflow-y: auto;  /* Enable vertical scrolling */
+    background-color: #222; /* Darker background for collapsible content */
+    max-height: 150px;  /* Set a fixed height for the content area */
+  }
+
+  /* Styling the scrollbar to blend with dark background */
+  .content::-webkit-scrollbar {
+    width: 8px; /* Width of the scrollbar */
+  }
+
+  .content::-webkit-scrollbar-track {
+    background: #333;  /* Dark background for scrollbar track */
+  }
+
+  .content::-webkit-scrollbar-thumb {
+    background: #555;  /* Dark thumb for the scrollbar */
+    border-radius: 10px; /* Rounded corners for the thumb */
+  }
+
+  .content::-webkit-scrollbar-thumb:hover {
+    background: #777; /* Slightly lighter thumb on hover */
+  }
+</style>
+
+
+
+
+  <script type="module">
+    // Your access token can be found at: https://ion.cesium.com/tokens.
+    // This is the default access token from your ion account
+
+// Grant CesiumJS access to your ion assets 
+Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlZmIyNTlhOC1iOTc5LTQwODUtYTljMy02YzNmZWExMjE0MDUiLCJpZCI6MTY3MDA3LCJpYXQiOjE2OTUwMTQ4ODZ9.eHcw-TqfrZ-DinV99eBWG_I5F8kObx-pwX4TIVR90vs";
+
+// Initialize the Cesium viewer with a terrainProvider, but without the default imageryProvider
+const viewer = new Cesium.Viewer("cesiumContainer", {
+    imageryProvider: false, // Disable default Bing Maps layer
+    timeline: false,
+    animation: false,
+    terrainProvider: await Cesium.CesiumTerrainProvider.fromIonAssetId(1),
+});
+
+viewer.scene.globe.depthTestAgainstTerrain = false;
+// Disable automatic sun lighting
+viewer.scene.globe.enableLighting = false;
+// Add Stadia Alidade Smooth layer as the base imagery layer
+const stadiaImagery = new Cesium.UrlTemplateImageryProvider({
+    url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png',
+    credit: '© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors',
+    maximumLevel: 20 // Adjust maximum zoom level if needed
+});
+viewer.imageryLayers.addImageryProvider(stadiaImagery);
+
+// Set a custom directional light with increased intensity
+viewer.scene.light = new Cesium.DirectionalLight({
+  direction: new Cesium.Cartesian3(0, -10, -5), // Directly downward
+  color: Cesium.Color.WHITE, // Pure white light
+  intensity: 7.0 // Increase intensity for a stronger light effect
+});
+
+
+// Update the light direction based on the camera's direction during each frame
+viewer.scene.preRender.addEventListener(function (scene, time) {
+    viewer.scene.light.direction = Cesium.Cartesian3.clone(
+        viewer.scene.camera.directionWC,
+        viewer.scene.light.direction
+    );
+});
+
+
+// 3D Models data array
+const modelData = [
+    { assetId: 2807919, name: "Malur" },
+    { assetId: 2807778, name: "Kuppam" },
+    { assetId: 2807809, name: "Whitefield" },
+    { assetId: 2807386, name: "Krishnarajapuram" },
+    { assetId: 2807610, name: "Bangarpete" }
+];
+
+// Function to load and set up the 3D models with controls
+async function load3DModel(model) {
+    try {
+        const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(model.assetId);
+        viewer.scene.primitives.add(tileset);
+
+        // Apply default style if exists
+        const extras = tileset.asset.extras;
+        if (Cesium.defined(extras) && Cesium.defined(extras.ion) && Cesium.defined(extras.ion.defaultStyle)) {
+            tileset.style = new Cesium.Cesium3DTileStyle(extras.ion.defaultStyle);
+        }
+
+        // Add toggle and zoom controls for this model
+        addModelControls(model, tileset);
+
+        return tileset;
+    } catch (error) {
+        console.log(`Error loading 3D model ${model.name}:`, error);
+    }
+}
+
+// Function to add toggle and zoom controls to the toolbar
+function addModelControls(model, tileset) {
+    const modelGroup = document.getElementById("modelLayers");
+
+    const toggleItem = document.createElement("div");
+    toggleItem.className = "toggle-item";
+    toggleItem.innerHTML = `
+        <input type="checkbox" id="${model.name}Toggle" checked>
+        <label for="${model.name}Toggle">${model.name} Model</label>
+        <button class="zoom-button" id="zoom${model.name.replace(/[^a-zA-Z0-9]/g, '')}">Zoom to ${model.name}</button>
+    `;
+    modelGroup.appendChild(toggleItem);
+
+    // Set up the checkbox toggle for visibility
+    document.getElementById(`${model.name}Toggle`).addEventListener("change", function () {
+        tileset.show = this.checked;
+    });
+
+    // Set up the button to zoom to this model
+    document.getElementById(`zoom${model.name.replace(/[^a-zA-Z0-9]/g, '')}`).addEventListener("click", function () {
+        viewer.flyTo(tileset);
+    });
+}
+
+// Load all models and add their respective controls
+let loadedModels = [];
+modelData.forEach(async (model) => {
+    const tileset = await load3DModel(model);
+    loadedModels.push({ name: model.name, tileset });
+});
+
+
+// Logic for the master checkbox (Toggle All Models)
+document.getElementById('masterModelCheckbox').addEventListener('change', function () {
+    const isChecked = this.checked;
+
+    // Loop through each toggle checkbox inside the Model Layers group
+    const modelCheckboxes = document.querySelectorAll("#modelLayers .toggle-item input[type='checkbox']");
+    modelCheckboxes.forEach((checkbox) => {
+        checkbox.checked = isChecked; // Check or uncheck based on the master checkbox
+        const modelName = checkbox.id.replace('Toggle', ''); // Get model name
+
+        // Find the corresponding tileset using the model name
+        const model = loadedModels.find(m => m.name === modelName);
+
+        // Set the visibility of the model based on the checkbox state
+        if (model) {
+            model.tileset.show = isChecked; // Toggle the show property of the tileset
+        }
+    });
+});
+
+
+
+(async () => {
+  try {
+    // Load the GeoJSON data
+    const resource = await Cesium.IonResource.fromAssetId(2850900);
+    const dataSource = await Cesium.GeoJsonDataSource.load(resource);
+    await viewer.dataSources.add(dataSource);
+    await viewer.zoomTo(dataSource);
+
+    const entities = dataSource.entities.values;
+    const entityNames = entities.map((entity) => entity.name).filter((name) => name); // Collect entity names
+
+    // Function to update billboard and label size based on camera height
+    const updateBillboardAndLabelSize = () => {
+      const cameraHeight = viewer.camera.positionCartographic.height;
+      const scaleFactor = cameraHeight > 7000 ? 0.1 : 1; // Set scale based on camera height
+      entities.forEach((entity) => {
+        if (entity.billboard) {
+          entity.billboard.scale = scaleFactor;
+          // Ensure the billboard is clamped to the ground
+          entity.billboard.heightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
+        }
+        if (entity.label) {
+          // Adjust label size similarly to billboard
+          entity.label.font = `${Math.max(12, 16 - cameraHeight / 1000)}px sans-serif`; // Dynamic font size based on camera height
+        }
+
+        // Apply translucency based on camera height
+        if (entity.label) {
+          entity.label.translucencyByDistance = new Cesium.NearFarScalar(
+            7000, 1.0, // Fully visible at or closer than 7000 meters
+            8000, 0.0  // Fully invisible at or farther than 8000 meters
+          );
+        }
+
+        if (entity.billboard) {
+          entity.billboard.translucencyByDistance = new Cesium.NearFarScalar(
+            7000, 1.0, // Fully visible at or closer than 7000 meters
+            8000, 0.0  // Fully invisible at or farther than 8000 meters
+          );
+        }
+      });
+    };
+
+    // Add a camera changed event listener to update sizes and translucency dynamically
+    viewer.camera.changed.addEventListener(updateBillboardAndLabelSize);
+
+    // Add labels and billboards to entities (if they have a name)
+    entities.forEach((entity) => {
+      if (entity.name) {
+        // Add the label to the entity
+        entity.label = new Cesium.LabelGraphics({
+          text: entity.name,
+          font: "14px sans-serif", // Default font size
+          fillColor: Cesium.Color.BLACK,
+          style: Cesium.LabelStyle.FILL,
+          showBackground: true,
+          backgroundColor: Cesium.Color.WHITE.withAlpha(0.8),
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, // Clamp label to ground
+          show: true, // Show labels by default
+        });
+
+      }
+    });
+
+    // Function to handle the search input
+    const searchBox = document.getElementById('searchBox');
+    const suggestionsList = document.getElementById('suggestions');
+
+    searchBox.addEventListener('input', function (event) {
+      const query = event.target.value.toLowerCase();
+      suggestionsList.innerHTML = ''; // Clear previous suggestions
+
+      if (query) {
+        const filteredNames = entityNames.filter((name) => name.toLowerCase().includes(query));
+        filteredNames.forEach((name) => {
+          const listItem = document.createElement('li');
+          listItem.textContent = name;
+          listItem.addEventListener('click', () => zoomToEntity(name)); // Zoom to entity when selected
+          suggestionsList.appendChild(listItem);
+        });
+      }
+    });
+
+    // Zoom to the selected entity based on name
+    const zoomToEntity = (name) => {
+      const entity = entities.find((entity) => entity.name === name);
+      if (entity) {
+        // Fly to the entity with a specific offset
+        viewer.flyTo(entity, {
+          offset: new Cesium.HeadingPitchRange(0, -Cesium.Math.PI_OVER_TWO, 150) // Top-down view with a 150-meter offset
+        });
+        searchBox.value = ''; // Clear the search box after selection
+        suggestionsList.innerHTML = ''; // Clear suggestions
+      }
+    };
+
+    // Initialize the size adjustment and translucency
+    updateBillboardAndLabelSize();
+  } catch (error) {
+    console.log(error);
+  }
+})();
+
+
+// Zoom to GeoJSON when button is clicked
+//document.getElementById("zoomGeoJson").addEventListener("click", function() {
+    //if (geoJsonDataSource) {
+      //  viewer.flyTo(geoJsonDataSource);
+   // }
+//});
+
+// Load the line feature from Cesium Ion
+let lineDataSource;
+try {
+    const lineResource = await Cesium.IonResource.fromAssetId(2777812);
+    lineDataSource = await Cesium.GeoJsonDataSource.load(lineResource, {
+        stroke: Cesium.Color.RED,
+        strokeWidth: 3,
+        clampToGround: true
+    });
+
+    // Add the line data to the viewer
+    viewer.dataSources.add(lineDataSource);
+
+} catch (error) {
+    console.log("Error loading line data source:", error);
+}
+
+// Toggle visibility of the line feature using a checkbox
+document.getElementById("lineToggle").addEventListener("change", function() {
+    if (lineDataSource) {
+        lineDataSource.show = this.checked;
+    }
+});
+
+// Zoom to line when button is clicked
+document.getElementById("zoomLine").addEventListener("click", function() {
+    if (lineDataSource) {
+        viewer.flyTo(lineDataSource);
+    }
+});
+
+
+// Function to load a KML layer and add it to the viewer
+async function loadKmlLayer(assetId, layerName) {
+    try {
+        const resource = await Cesium.IonResource.fromAssetId(assetId);
+        const kmlDataSource = await Cesium.KmlDataSource.load(resource, {
+            camera: viewer.scene.camera,
+            canvas: viewer.scene.canvas,
+            clampToGround: true
+        });
+        kmlDataSource.show = true; // Initially show the KML layer
+        viewer.dataSources.add(kmlDataSource);
+
+        // Hide labels in the KML layer
+        kmlDataSource.entities.values.forEach(entity => {
+            if (entity.label) {
+                entity.label.show = false;
+            }
+        });
+
+        // Create the checkbox toggle for this KML layer
+        const toggleItem = document.createElement("div");
+        toggleItem.className = "toggle-item";
+        toggleItem.innerHTML = `
+            <input type="checkbox" id="${layerName}Toggle" checked>
+            <label for="${layerName}Toggle">${layerName}</label>
+            <button class="zoom-button" id="zoom${layerName.replace(/[^a-zA-Z0-9]/g, '')}">Zoom to ${layerName}</button>
+        `;
+
+        // Add the toggle item to the "Metro Layers" collapsible section
+        const layerGroup = document.getElementById("metroLayers");
+        layerGroup.appendChild(toggleItem);
+
+        // Set up the checkbox toggle for visibility
+        document.getElementById(`${layerName}Toggle`).addEventListener("change", function () {
+            kmlDataSource.show = this.checked;
+        });
+
+        // Set up the button to zoom to this KML layer
+        document.getElementById(`zoom${layerName.replace(/[^a-zA-Z0-9]/g, '')}`).addEventListener("click", function () {
+            viewer.flyTo(kmlDataSource);
+        });
+
+        return kmlDataSource;
+    } catch (error) {
+        console.log(`Error loading KML layer ${layerName}:`, error);
+    }
+}
+
+// Load the KML layers with the corresponding asset IDs and layer names
+const kmlLayers = [
+    { assetId: 2791816, layerName: "phase-2B Bangalore Metro Rail" },
+    { assetId: 2791812, layerName: "Phase-2A Bangalore Metro Rail" },
+    { assetId: 2850580, layerName: "Phase-2 Bangalore Metro Rail" },
+    { assetId: 2791808, layerName: "Phase-1 Bangalore Metro Rail" },
+    { assetId: 2791775, layerName: "Phase-3A Corridor" },
+    { assetId: 2811395, layerName: "Bangalore Phase-3" },
+    { assetId: 2813297, layerName: "Indian Railway" },
+    { assetId: 2813295, layerName: "BSRP-IR-BMRCL all Merged" }
+];
+
+// Load each KML layer
+let loadedLayers = [];
+for (const kmlLayer of kmlLayers) {
+    const layer = await loadKmlLayer(kmlLayer.assetId, kmlLayer.layerName);
+    loadedLayers.push({ layerName: kmlLayer.layerName, kmlDataSource: layer });
+}
+
+// Collapsible logic
+var coll = document.getElementsByClassName("collapsible");
+for (var i = 0; i < coll.length; i++) {
+    coll[i].addEventListener("click", function() {
+        this.classList.toggle("active");
+        var content = this.nextElementSibling;
+        if (content.style.display === "block") {
+            content.style.display = "none";
+        } else {
+            content.style.display = "block";
+        }
+    });
+}
+
+// Logic for the master checkbox (Toggle All Layers)
+document.getElementById('masterCheckbox').addEventListener('change', function() {
+    const isChecked = this.checked;
+
+    // Loop through each toggle checkbox inside the Metro Layers group
+    const layerCheckboxes = document.querySelectorAll("#metroLayers .toggle-item input[type='checkbox']");
+    layerCheckboxes.forEach((checkbox) => {
+        checkbox.checked = isChecked; // Check or uncheck based on the master checkbox
+        const layerName = checkbox.id.replace('Toggle', ''); // Get layerName
+        
+        // Find the corresponding kmlDataSource using the layerName
+        const layer = loadedLayers.find(l => l.layerName === layerName);
+        
+        // Set the visibility of the KML layer based on the checkbox state
+        if (layer) {
+            layer.kmlDataSource.show = isChecked; // Toggle the show property of the KML layer
+        }
+    });
+});
+
+
+  
+  </script>
+ </div>
+</body>
+</html>

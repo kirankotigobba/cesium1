@@ -194,12 +194,12 @@ viewer.scene.globe.depthTestAgainstTerrain = false;
 // Disable automatic sun lighting
 viewer.scene.globe.enableLighting = false;
 // Add Stadia Alidade Smooth layer as the base imagery layer
-const stadiaImagery = new Cesium.UrlTemplateImageryProvider({
-    url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png',
-    credit: '© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors',
-    maximumLevel: 20 // Adjust maximum zoom level if needed
+const cartoPositronImagery = new Cesium.UrlTemplateImageryProvider({
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+    credit: '© OpenStreetMap contributors, © CartoDB',
+    maximumLevel: 19
 });
-viewer.imageryLayers.addImageryProvider(stadiaImagery);
+viewer.imageryLayers.addImageryProvider(cartoPositronImagery);
 
 // Set a custom directional light with increased intensity
 viewer.scene.light = new Cesium.DirectionalLight({
